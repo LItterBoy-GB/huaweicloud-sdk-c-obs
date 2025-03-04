@@ -565,6 +565,7 @@ static obs_status response_properties_callback(const obs_response_properties *pr
         printf("x-amz-meta-%s: %s\n", properties->meta_data[i].name,
                properties->meta_data[i].value);
     }
+    printf("\n\n");
     return OBS_STATUS_OK;
 }
 static void response_complete_callback_for_multi_task(obs_status status,
@@ -5330,6 +5331,9 @@ static void test_download_file(int argc, char **argv, int optindex)
 			fprintf(stderr, "\nERROR: Unknown param: %s\n", param);
 		}
 	}
+
+
+
 	obs_get_conditions getConditions;
 	memset_s(&getConditions, sizeof(obs_get_conditions), 0, sizeof(obs_get_conditions));
 	init_get_properties(&getConditions);
@@ -6394,9 +6398,9 @@ static void test_delete_bucket_trash(int argc, char ** argv, int optindex) {
 int main(int argc, char **argv)
 {
     int optind =1;
-	char* access_key_id_from_env = getenv("ACCESS_KEY_ID");
-	char* secret_access_key_id_from_env = getenv("SECRET_ACCESS_KEY_ID");
-	char* host_from_env = getenv("ENDPOINT_NO_PREFIX");
+	char* access_key_id_from_env = "YVAVOPDEOSOT2DMVBOTH";
+	char* secret_access_key_id_from_env = "DpiVYL3zP6JpulXovc0gpldmHWkuqnXeByyiGkRd";
+	char* host_from_env = "obs.cn-south-1.myhuaweicloud.com";
     strcpy_s(ACCESS_KEY_ID,sizeof(ACCESS_KEY_ID), access_key_id_from_env);
     strcpy_s(SECRET_ACCESS_KEY,sizeof(SECRET_ACCESS_KEY), secret_access_key_id_from_env);
     strcpy_s(HOST_NAME,sizeof(HOST_NAME), host_from_env);

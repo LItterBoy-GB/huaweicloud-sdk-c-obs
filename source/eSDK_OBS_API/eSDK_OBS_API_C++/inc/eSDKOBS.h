@@ -1529,6 +1529,13 @@ eSDK_OBS_API void download_file(const obs_options *options, char *key, char* ver
                         obs_download_file_configuration * download_file_config,
                         obs_download_file_response_handler *handler, void *callback_data);
 
+// download_file_info  实际类型为  download_file_summary*   此处由于头文件冲突用void* 实现方法强转了
+eSDK_OBS_API void download_file_with_file_info(const obs_options* options, char* key, char* version_id, obs_get_conditions* get_conditions,
+    server_side_encryption_params* encryption_params,
+    obs_download_file_configuration* download_file_config,
+    obs_download_file_response_handler* handler,
+    void* download_file_info, void* callback_data);
+
 eSDK_OBS_API void batch_delete_objects(const obs_options *options, obs_object_info *object_info,obs_delete_object_info *delobj,     
                                   obs_put_properties *put_properties, obs_delete_object_handler *handler, void *callback_data);
 

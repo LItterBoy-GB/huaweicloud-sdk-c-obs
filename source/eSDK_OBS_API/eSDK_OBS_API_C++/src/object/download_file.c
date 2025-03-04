@@ -1853,20 +1853,30 @@ size_t get_malloc_size_for_download_file_part_info(download_file_summary *pstDow
 	return partCountTemp * sizeof(download_file_part_info);
 }
 
-void download_file(const obs_options *options, char *key, char* version_id,
-    obs_get_conditions *get_conditions,
-    server_side_encryption_params *encryption_params,
-    obs_download_file_configuration * download_file_config,
-    obs_download_file_response_handler *handler, void *callback_data)
+void download_file(const obs_options* options, char* key, char* version_id,
+    obs_get_conditions* get_conditions,
+    server_side_encryption_params* encryption_params,
+    obs_download_file_configuration* download_file_config,
+    obs_download_file_response_handler* handler, void* callback_data)
 {
-    download_file_summary downLoadFileInfo;
+    download_file_with_file_info(options, key, version_id, get_conditions, encryption_params, download_file_config, handler, NULL, callback_data);
+}
+
+
+eSDK_OBS_API void download_file_with_file_info(const obs_options* options, char* key, char* version_id, obs_get_conditions* get_conditions,
+    server_side_encryption_params* encryption_params,
+    obs_download_file_configuration* download_file_config,
+    obs_download_file_response_handler* handler,
+    void* download_file_info, void* callback_data) {
+
+    download_file_summary* downLoadFileInfo = NULL;
     int retVal = -1;
     char* storeFile = getPathBuffer(1024);
     int isFirstTime = 1;
-    download_file_part_info * pstDownloadFilePartInfoList = NULL;
-	download_file_part_info * pstDownloadFilePartInfoListOrigin = NULL;
-    download_file_part_info * pstPartInfoListDone = NULL;
-    download_file_part_info * pstPartInfoListNotDone = NULL;
+    download_file_part_info* pstDownloadFilePartInfoList = NULL;
+    download_file_part_info* pstDownloadFilePartInfoListOrigin = NULL;
+    download_file_part_info* pstPartInfoListDone = NULL;
+    download_file_part_info* pstPartInfoListNotDone = NULL;
     int partCount = 0;
     char* checkpointFile = getPathBuffer(1024);
     int partCountToProc = 0;
@@ -1876,92 +1886,98 @@ void download_file(const obs_options *options, char *key, char* version_id,
 
     download_params stDownloadParams;
     COMMLOG(OBS_LOGERROR, "in DownloadFile download_file_config: partsize=%d ", download_file_config->part_size);
-
-    memset_s(&downLoadFileInfo, sizeof(download_file_summary), 0, sizeof(download_file_summary));
-    //get the info of the object
-    obs_status ret_status = getObjectInfo(&downLoadFileInfo, options, key, version_id, encryption_params);
-    if (OBS_STATUS_OK != ret_status)
-    {
-        COMMLOG(OBS_LOGERROR, "in DownloadFile Get object metadata failed(%d),bucket=%s, key=%s,version_id=%s",
-            ret_status, options->bucket_options.bucket_name,
-            key,
-            version_id);
-        (void)(*(handler->response_handler.complete_callback))(ret_status, 0, callback_data);
-		CHECK_NULL_FREE(storeFile);
-		CHECK_NULL_FREE(checkpointFile);
-        return;
+    obs_status ret_status;
+    if (download_file_info == NULL) {
+        downLoadFileInfo = (download_file_summary*)malloc(sizeof(download_file_summary));
+        memset_s(downLoadFileInfo, sizeof(download_file_summary), 0, sizeof(download_file_summary));
+        //get the info of the object
+        ret_status = getObjectInfo(downLoadFileInfo, options, key, version_id, encryption_params);
+        if (OBS_STATUS_OK != ret_status)
+        {
+            COMMLOG(OBS_LOGERROR, "in DownloadFile Get object metadata failed(%d),bucket=%s, key=%s,version_id=%s",
+                ret_status, options->bucket_options.bucket_name,
+                key,
+                version_id);
+            (void)(*(handler->response_handler.complete_callback))(ret_status, 0, callback_data);
+            CHECK_NULL_FREE(storeFile);
+            CHECK_NULL_FREE(checkpointFile);
+            return;
+        }
+    }
+    else {
+        downLoadFileInfo = (download_file_summary*)download_file_info;
     }
     //if the storage is glacier, restore the object firstly
-    if (downLoadFileInfo.storage_class == OBS_STORAGE_CLASS_GLACIER)
+    if (downLoadFileInfo->storage_class == OBS_STORAGE_CLASS_GLACIER)
     {
         ret_status = restoreGlacierObject(options, key, version_id);
         if (OBS_STATUS_OK != ret_status)
         {
             COMMLOG(OBS_LOGERROR, "in DownloadFile restoreGlacierObject failed(%d).", ret_status);
             (void)(*(handler->response_handler.complete_callback))(ret_status, 0, callback_data);
-			CHECK_NULL_FREE(storeFile);
-			CHECK_NULL_FREE(checkpointFile);
+            CHECK_NULL_FREE(storeFile);
+            CHECK_NULL_FREE(checkpointFile);
             return;
-        } 
+        }
     }
 
-	uint64_t download_file_part_info_mem_size = 0;
+    uint64_t download_file_part_info_mem_size = 0;
     {
-		bool part_size_illegal = ((download_file_config->part_size == 0)
-			|| (download_file_config->part_size > MAX_PART_SIZE));
-		part_size = part_size_illegal ? DEFAULT_PART_SIZE : download_file_config->part_size;
-		part_size = part_size > downLoadFileInfo.objectLength ? downLoadFileInfo.objectLength : part_size;
-		download_file_part_info_mem_size = get_malloc_size_for_download_file_part_info(&downLoadFileInfo, part_size);
-		
-		int readCheckPointOk = 0;
-		download_file_summary downLoadFileInfoOld = { 0 };
-		//2,set the file to store the object, and the checkpoint file
-		isFirstTime = get_download_isfirst_time_setFile(download_file_config, storeFile, 0,
-			-1, key, checkpointFile, 1);
+        bool part_size_illegal = ((download_file_config->part_size == 0)
+            || (download_file_config->part_size > MAX_PART_SIZE));
+        part_size = part_size_illegal ? DEFAULT_PART_SIZE : download_file_config->part_size;
+        part_size = part_size > downLoadFileInfo->objectLength ? downLoadFileInfo->objectLength : part_size;
+        download_file_part_info_mem_size = get_malloc_size_for_download_file_part_info(downLoadFileInfo, part_size);
 
-		//3, read the content of the checkpoint file
-		xmlNodePtr curNode = NULL;
-		xmlDocPtr doc = NULL;           //the doc pointer to parse the file
-		if (download_file_config->enable_check_point)
-		{
-			readCheckPointOk = readCheckpointFile_Download_XML(checkpointFile, &doc, &curNode);
-			readCheckpointFile_ToGetDownloadPartCount(curNode, &partCount);
-			uint64_t download_file_part_info_mem_size_old = partCount * sizeof(download_file_part_info);
-			download_file_part_info_mem_size =
-				download_file_part_info_mem_size < download_file_part_info_mem_size_old ?
-				download_file_part_info_mem_size_old : download_file_part_info_mem_size;
-		}
-		pstDownloadFilePartInfoListOrigin = (download_file_part_info*)malloc(download_file_part_info_mem_size);
-		pstDownloadFilePartInfoList = pstDownloadFilePartInfoListOrigin;
-		if (!CheckAndLogNULL(pstDownloadFilePartInfoListOrigin,
-			SYMBOL_NAME_STR(pstDownloadFilePartInfoListOrigin), SYMBOL_NAME_STR(malloc), __FUNCTION__, __LINE__)) {
-			ret_status = OBS_STATUS_OutOfMemory;
-			(void)(*(handler->response_handler.complete_callback))(ret_status, 0, callback_data);
-			CHECK_NULL_FREE(storeFile);
-			CHECK_NULL_FREE(checkpointFile);
-			checkAndXmlFreeDoc(&doc);
-			return;
-		}
-		errno_t err = memset_s(pstDownloadFilePartInfoListOrigin, download_file_part_info_mem_size, 0, download_file_part_info_mem_size);
-		if (checkIfErrorAndLogStrError(SYMBOL_NAME_STR(memset_s), __FUNCTION__, __LINE__, err)) {
-			ret_status = OBS_STATUS_Security_Function_Failed;
-			(void)(*(handler->response_handler.complete_callback))(ret_status, 0, callback_data);
-			CHECK_NULL_FREE(storeFile);
-			CHECK_NULL_FREE(checkpointFile);
-			CHECK_NULL_FREE(pstDownloadFilePartInfoListOrigin);
-			checkAndXmlFreeDoc(&doc);
-			return;
-		}
+        int readCheckPointOk = 0;
+        download_file_summary downLoadFileInfoOld = { 0 };
+        //2,set the file to store the object, and the checkpoint file
+        isFirstTime = get_download_isfirst_time_setFile(download_file_config, storeFile, 0,
+            -1, key, checkpointFile, 1);
 
-		if (download_file_config->enable_check_point && readCheckPointOk == 0) {
+        //3, read the content of the checkpoint file
+        xmlNodePtr curNode = NULL;
+        xmlDocPtr doc = NULL;           //the doc pointer to parse the file
+        if (download_file_config->enable_check_point)
+        {
+            readCheckPointOk = readCheckpointFile_Download_XML(checkpointFile, &doc, &curNode);
+            readCheckpointFile_ToGetDownloadPartCount(curNode, &partCount);
+            uint64_t download_file_part_info_mem_size_old = partCount * sizeof(download_file_part_info);
+            download_file_part_info_mem_size =
+                download_file_part_info_mem_size < download_file_part_info_mem_size_old ?
+                download_file_part_info_mem_size_old : download_file_part_info_mem_size;
+        }
+        pstDownloadFilePartInfoListOrigin = (download_file_part_info*)malloc(download_file_part_info_mem_size);
+        pstDownloadFilePartInfoList = pstDownloadFilePartInfoListOrigin;
+        if (!CheckAndLogNULL(pstDownloadFilePartInfoListOrigin,
+            SYMBOL_NAME_STR(pstDownloadFilePartInfoListOrigin), SYMBOL_NAME_STR(malloc), __FUNCTION__, __LINE__)) {
+            ret_status = OBS_STATUS_OutOfMemory;
+            (void)(*(handler->response_handler.complete_callback))(ret_status, 0, callback_data);
+            CHECK_NULL_FREE(storeFile);
+            CHECK_NULL_FREE(checkpointFile);
+            checkAndXmlFreeDoc(&doc);
+            return;
+        }
+        errno_t err = memset_s(pstDownloadFilePartInfoListOrigin, download_file_part_info_mem_size, 0, download_file_part_info_mem_size);
+        if (checkIfErrorAndLogStrError(SYMBOL_NAME_STR(memset_s), __FUNCTION__, __LINE__, err)) {
+            ret_status = OBS_STATUS_Security_Function_Failed;
+            (void)(*(handler->response_handler.complete_callback))(ret_status, 0, callback_data);
+            CHECK_NULL_FREE(storeFile);
+            CHECK_NULL_FREE(checkpointFile);
+            CHECK_NULL_FREE(pstDownloadFilePartInfoListOrigin);
+            checkAndXmlFreeDoc(&doc);
+            return;
+        }
 
-			readCheckPointOk = readCheckpointFile_Download_xmlCmp(curNode, &downLoadFileInfoOld,
-				&pstDownloadFilePartInfoList, &partCount, readCheckPointOk);
-			isFirstTime = get_download_isfirst_time_read(&downLoadFileInfoOld, &pstDownloadFilePartInfoList,
-				&partCount, &downLoadFileInfo, 0, 0,
-			    checkpointFile, storeFile, retVal, is_true, isFirstTime);
-		}
-		checkAndXmlFreeDoc(&doc);
+        if (download_file_config->enable_check_point && readCheckPointOk == 0) {
+
+            readCheckPointOk = readCheckpointFile_Download_xmlCmp(curNode, &downLoadFileInfoOld,
+                &pstDownloadFilePartInfoList, &partCount, readCheckPointOk);
+            isFirstTime = get_download_isfirst_time_read(&downLoadFileInfoOld, &pstDownloadFilePartInfoList,
+                &partCount, downLoadFileInfo, 0, 0,
+                checkpointFile, storeFile, retVal, is_true, isFirstTime);
+        }
+        checkAndXmlFreeDoc(&doc);
     }
 
 
@@ -1969,33 +1985,33 @@ void download_file(const obs_options *options, char *key, char* version_id,
     is_true = ((isFirstTime == 1) || (download_file_config->enable_check_point == 0));
     if (is_true)
     {
-		errno_t err = memset_s(pstDownloadFilePartInfoListOrigin, download_file_part_info_mem_size, 0, download_file_part_info_mem_size);
-		if (checkIfErrorAndLogStrError(SYMBOL_NAME_STR(memset_s), __FUNCTION__, __LINE__, err)) {
-			ret_status = OBS_STATUS_Security_Function_Failed;
-			(void)(*(handler->response_handler.complete_callback))(ret_status, 0, callback_data);
-			CHECK_NULL_FREE(storeFile);
-			CHECK_NULL_FREE(checkpointFile);
-			CHECK_NULL_FREE(pstDownloadFilePartInfoListOrigin);
-			return;
-		}
-		retVal = setDownloadpartList(&downLoadFileInfo, part_size, &pstDownloadFilePartInfoList, &partCount);
-		if (retVal == -1)
-		{
-			if (download_file_config->enable_check_point)
-			{
-				remove_file(checkpointFile);
-			}
-			CHECK_NULL_FREE(storeFile);
-			CHECK_NULL_FREE(checkpointFile);
-			CHECK_NULL_FREE(pstDownloadFilePartInfoListOrigin);
-			return;
-		}
+        errno_t err = memset_s(pstDownloadFilePartInfoListOrigin, download_file_part_info_mem_size, 0, download_file_part_info_mem_size);
+        if (checkIfErrorAndLogStrError(SYMBOL_NAME_STR(memset_s), __FUNCTION__, __LINE__, err)) {
+            ret_status = OBS_STATUS_Security_Function_Failed;
+            (void)(*(handler->response_handler.complete_callback))(ret_status, 0, callback_data);
+            CHECK_NULL_FREE(storeFile);
+            CHECK_NULL_FREE(checkpointFile);
+            CHECK_NULL_FREE(pstDownloadFilePartInfoListOrigin);
+            return;
+        }
+        retVal = setDownloadpartList(downLoadFileInfo, part_size, &pstDownloadFilePartInfoList, &partCount, download_file_config->download_flag_id);
+        if (retVal == -1)
+        {
+            if (download_file_config->enable_check_point)
+            {
+                remove_file(checkpointFile);
+            }
+            CHECK_NULL_FREE(storeFile);
+            CHECK_NULL_FREE(checkpointFile);
+            CHECK_NULL_FREE(pstDownloadFilePartInfoListOrigin);
+            return;
+        }
     }
 
     is_true = ((isFirstTime == 1) && (download_file_config->enable_check_point == 1));
     if (is_true)
     {
-        (void)writeCheckpointFile_Download(&downLoadFileInfo,
+        (void)writeCheckpointFile_Download(downLoadFileInfo,
             pstDownloadFilePartInfoList, partCount, checkpointFile);
     }
 
@@ -2027,7 +2043,7 @@ void download_file(const obs_options *options, char *key, char* version_id,
     partCountToProc = download_file_linux(download_file_config, pstPartInfoListDone, pstPartInfoListNotDone,
         stDownloadParams, partCountToProc, checkpointFile, handler, callback_data, storeFile, partCount);
 #endif
-	CHECK_NULL_FREE(storeFile);
-	CHECK_NULL_FREE(checkpointFile);
-	CHECK_NULL_FREE(pstDownloadFilePartInfoListOrigin);
+    CHECK_NULL_FREE(storeFile);
+    CHECK_NULL_FREE(checkpointFile);
+    CHECK_NULL_FREE(pstDownloadFilePartInfoListOrigin);
 }

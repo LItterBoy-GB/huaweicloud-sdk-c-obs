@@ -1,6 +1,17 @@
 ﻿################################################################################
 # 此 .gitignore 文件已由 Microsoft(R) Visual Studio 自动创建。
 ################################################################################
-
-/source/eSDK_OBS_API/eSDK_OBS_API_C++/build/vc100/Debug/obs
+*.vsidx
+source/eSDK_OBS_API/eSDK_OBS_API_C++/sln/vc100/.vs/obs/v17/.suo
+/source/eSDK_OBS_API/eSDK_OBS_API_C++/sln/vc100/.vs
+/source/eSDK_OBS_API/eSDK_OBS_API_C++_Demo/sln/.vs
+*.obj
+*.log
+*.tlog
+*.pdb
 /source/eSDK_OBS_API/eSDK_OBS_API_C++/build/vc100/Debug
+/source/eSDK_OBS_API/eSDK_OBS_API_C++/build/vc100/Release
+/source/eSDK_OBS_API/eSDK_OBS_API_C++_Demo/sln/Win32
+/source/eSDK_OBS_API/eSDK_OBS_API_C++_Demo/sln/x64
+/source/eSDK_OBS_API/eSDK_OBS_API_C++_Demo/sln/obs_demo/x64
+source/eSDK_OBS_API/eSDK_OBS_API_C++/build/vc100/Release/obs/obs.log
