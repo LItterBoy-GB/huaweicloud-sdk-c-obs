@@ -756,6 +756,7 @@ typedef struct _obs_download_file_configuration
     char * check_point_file;
     int enable_check_point;
     int task_num;
+    bool cancle;   // 是否取消下载
 }obs_download_file_configuration;
 
 typedef struct _obs_upload_file_part_info

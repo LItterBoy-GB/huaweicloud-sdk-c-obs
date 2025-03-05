@@ -197,7 +197,7 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
-    <OutDir>$(ProjectDir)..\..\build\vc100\$(Configuration)\</OutDir>
+    <OutDir>$(ProjectDir)..\..\build\vc100\$(Configuration)\$(Platform)\</OutDir>
     <IntDir>$(ProjectDir)..\..\build\vc100\$(Configuration)\$(ProjectName)\</IntDir>
     <TargetName>libeSDKOBS</TargetName>
   </PropertyGroup>

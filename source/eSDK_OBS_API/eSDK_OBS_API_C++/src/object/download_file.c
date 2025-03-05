@@ -929,10 +929,14 @@ static obs_status getObjectPartDataCallback(int buffer_size, const char *buffer,
     void *callback_data)
 {
     download_file_callback_data * cbd = (download_file_callback_data *)callback_data;
-
+    if (cbd->cancle != NULL && *cbd->cancle)
+        return OBS_STATUS_OperationAborted;
     int fd = cbd->fdStorefile;
 
     size_t wrote = write(fd, buffer, buffer_size);
+
+    if (cbd->cancle != NULL && *cbd->cancle)
+        return OBS_STATUS_OperationAborted;
 
     return ((wrote < (size_t)buffer_size) ?
         OBS_STATUS_AbortedByCallback : OBS_STATUS_OK);
@@ -982,6 +986,7 @@ unsigned __stdcall DownloadThreadProc_win32(void* param)
         sprintf_s(strPartNum, ARRAY_LENGTH_16, "%d", part_num + 1);
         memset_s(&data, sizeof(download_file_callback_data), 0, sizeof(download_file_callback_data));
 
+        data.cancle = pstPara->pstDownloadParams->cancle;
         data.bytesRemaining = part_size;
         data.totalBytes = part_size;
         data.callbackDataIn = pstPara->callBackData;
@@ -1020,8 +1025,13 @@ unsigned __stdcall DownloadThreadProc_win32(void* param)
         get_conditions.start_byte = pstPara->pstDownloadFilePartInfo->start_byte;
         get_conditions.byte_count = part_size;
         COMMLOG(OBS_LOGINFO, "get_object partnum[%d] start:%ld size:%ld", part_num, get_conditions.start_byte, get_conditions.byte_count);
-        get_object(pstPara->pstDownloadParams->options, &object_info, &get_conditions,
-            pstPara->pstDownloadParams->pstServerSideEncryptionParams, &getObjectHandler, &data);
+        if (data.cancle != NULL && *data.cancle) {
+            (void)(*(getObjectHandler.response_handler.complete_callback))(OBS_STATUS_OperationAborted, 0, &data);
+        }
+        else {
+            get_object(pstPara->pstDownloadParams->options, &object_info, &get_conditions,
+                pstPara->pstDownloadParams->pstServerSideEncryptionParams, &getObjectHandler, &data);
+        }
     }
 
 	if (fd != -1)
@@ -1139,12 +1149,18 @@ void startDownloadThreadsWin32(HANDLE *arrHandle, download_file_proc_data *downl
     int i = 0;
     for (i = 0; i < partCount; i++)
     {
-        arrHandle[i] = (HANDLE)_beginthreadex(NULL, 0, DownloadThreadProc_win32,
-            &downloadFileProcDataList[i], CREATE_SUSPENDED, &uiThread2ID);
-        if (arrHandle[i] == 0)
-        {
-            GetExitCodeThread(arrHandle[i], &dwExitCode);
-            COMMLOG(OBS_LOGERROR, "create thread i[%d] failed exit code = %u \n", i, dwExitCode);
+        download_file_proc_data* proc_data = &downloadFileProcDataList[i];
+        if (proc_data->pstDownloadParams->cancle != NULL && (*proc_data->pstDownloadParams->cancle)) {
+            arrHandle[i] = NULL;
+        }
+        else {
+            arrHandle[i] = (HANDLE)_beginthreadex(NULL, 0, DownloadThreadProc_win32,
+                &downloadFileProcDataList[i], CREATE_SUSPENDED, &uiThread2ID);
+            if (arrHandle[i] == 0)
+            {
+                GetExitCodeThread(arrHandle[i], &dwExitCode);
+                COMMLOG(OBS_LOGERROR, "create thread i[%d] failed exit code = %u \n", i, dwExitCode);
+            }
         }
         pstOnePartInfo = pstOnePartInfo->next;
     }
@@ -1737,8 +1753,14 @@ void download_complete_handle_noSuccess(obs_download_file_configuration *downloa
     retVal = setDownloadReturnPartList(pstDownloadFilePartInfoList, &partListReturn, partCount);
     if ((retVal == 0) && (handler->download_file_callback))
     {
-        handler->download_file_callback(OBS_STATUS_InternalError, "DownloadFile Not all parts download success\n",
-            partCount, partListReturn, callback_data);
+        if (download_file_config->cancle) {
+            handler->download_file_callback(OBS_STATUS_OperationAborted, "cancel download\n",
+                partCount, partListReturn, callback_data);
+        }
+        else {
+            handler->download_file_callback(OBS_STATUS_InternalError, "DownloadFile Not all parts download success\n",
+                partCount, partListReturn, callback_data);
+        }
     }
     if (download_file_config->enable_check_point == 0)
     {
@@ -1793,7 +1815,7 @@ int download_file_win32(obs_download_file_configuration *download_file_config,
         if (ret < 0) {
             COMMLOG(OBS_LOGWARN, "GetDownloadPartListToProcess returns %d.", ret);
         }
-        if (partCountToProc > 0)
+        if (partCountToProc > 0 && !download_file_config->cancle)
         {
             startDownloadThreads(&stDownloadParams, pstPartInfoListNotDone, partCountToProc, callback_data, &mutexThreadCheckpoint);
         }
@@ -1994,7 +2016,7 @@ eSDK_OBS_API void download_file_with_file_info(const obs_options* options, char*
             CHECK_NULL_FREE(pstDownloadFilePartInfoListOrigin);
             return;
         }
-        retVal = setDownloadpartList(downLoadFileInfo, part_size, &pstDownloadFilePartInfoList, &partCount, download_file_config->download_flag_id);
+        retVal = setDownloadpartList(downLoadFileInfo, part_size, &pstDownloadFilePartInfoList, &partCount);
         if (retVal == -1)
         {
             if (download_file_config->enable_check_point)
@@ -2030,6 +2052,7 @@ eSDK_OBS_API void download_file_with_file_info(const obs_options* options, char*
     stDownloadParams.pstServerSideEncryptionParams = encryption_params;
     stDownloadParams.response_handler = &(handler->response_handler);
     stDownloadParams.get_conditions = get_conditions;
+    stDownloadParams.cancle = &download_file_config->cancle;
     download_file_config->task_num = download_file_config->task_num == 0 ? MAX_THREAD_NUM :
         download_file_config->task_num;
     partCountToProc = 0;

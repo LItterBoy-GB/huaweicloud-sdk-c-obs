@@ -3,7 +3,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LocalDebuggerEnvironment>PATH=%PATH%;$(ProjectDir)..\..\eSDK_OBS_API_C++\build\vc100\$(Configuration);$(ProjectDir)..\..\eSDK_OBS_API_C++\bin\win64_x64_msvc\release;$(ProjectDir)..\..\..\..\platform\eSDK_LogAPI_V2.1.10\C\debug_x64;$(LocalDebuggerEnvironment)</LocalDebuggerEnvironment>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-    <LocalDebuggerCommandArguments>download_file dfc VC_redist.x64.exe</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>download_file dfc dfc_source_bak.zip</LocalDebuggerCommandArguments>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LocalDebuggerEnvironment>PATH=%PATH%;$(ProjectDir)..\..\eSDK_OBS_API_C++\build\vc100\$(Configuration);$(ProjectDir)..\..\eSDK_OBS_API_C++\bin\win64_x64_msvc\release;$(ProjectDir)..\..\..\..\platform\eSDK_LogAPI_V2.1.10\C\debug_x64;$(LocalDebuggerEnvironment)</LocalDebuggerEnvironment>
