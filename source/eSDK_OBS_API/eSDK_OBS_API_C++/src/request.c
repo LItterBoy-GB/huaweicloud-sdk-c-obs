@@ -1069,7 +1069,8 @@ int is_retry(http_request *request, int is_retry)
         {
             if (is_retry)
             {
-                uint64_t wait_time = pow(2, RETRY_NUM - is_retry + 1) * 50;
+                uint64_t wait_time = pow(2, RETRY_NUM - is_retry + 1) * RETRY_BASE;
+                if (wait_time > RETRY_MAX_WAIT_TIME) wait_time = RETRY_MAX_WAIT_TIME;
 #ifdef WIN32
                 Sleep(wait_time);
 #else

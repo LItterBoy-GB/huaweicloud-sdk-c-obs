@@ -48,7 +48,8 @@
 #define DEFAULT_TCP_KEEPIDLE       (120)
 #define DEFAULT_TCP_KEEPINVTL      (60)
 #define DEFAULT_MAXCONNECTS        (-1)
-#define RETRY_NUM                  (3)
+#define RETRY_NUM                  (10)
+#define RETRY_MAX_WAIT_TIME        (1000)
 #define RETRY_BASE                 (50) //retry base tiem is 50ms
 #define LINUX_USTOMS               (1000) // us -> ms
 

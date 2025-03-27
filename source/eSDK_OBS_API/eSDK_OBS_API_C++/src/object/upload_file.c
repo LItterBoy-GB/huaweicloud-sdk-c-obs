@@ -1512,7 +1512,7 @@ void startUploadThreads(upload_params * pstUploadParams,
     if (uploadFileProcDataList == NULL) {
         COMMLOG(OBS_LOGWARN, "startUploadThreads: uploadFileProcDataList malloc failed!\n");
         if (pstUploadParams->response_handler->complete_callback) {
-            (pstUploadParams->response_handler->complete_callback)(OBS_STATUS_InternalError, 0, callback_data);
+            (pstUploadParams->response_handler->complete_callback)(OBS_STATUS_OutOfMemory, 0, callback_data);
         }
         return;
     }
@@ -1525,7 +1525,7 @@ void startUploadThreads(upload_params * pstUploadParams,
     if (uploadFileProgress == NULL) {
         COMMLOG(OBS_LOGWARN, "startUploadThreads: uploadFileProgress malloc failed!\n");
         if (pstUploadParams->response_handler->complete_callback) {
-            (pstUploadParams->response_handler->complete_callback)(OBS_STATUS_InternalError, 0, callback_data);
+            (pstUploadParams->response_handler->complete_callback)(OBS_STATUS_OutOfMemory, 0, callback_data);
         }
         CHECK_NULL_FREE(uploadFileProcDataList);
         return;
@@ -1802,8 +1802,12 @@ void upload_complete_handle_allSuccess(const obs_options *options, char *key, ob
         }
         else if (handler->upload_file_callback)
         {
-            handler->upload_file_callback(OBS_STATUS_InternalError,
-                "complete multi part failed!\n", 0, NULL, callback_data);
+            if(*upload_file_config->pause_upload_flag == 1)
+                handler->upload_file_callback(OBS_STATUS_OperationAborted,
+                    "abort!\n", 0, NULL, callback_data);
+            else
+                handler->upload_file_callback(OBS_STATUS_InternalError,
+                 "complete multi part failed!\n", 0, NULL, callback_data);
         }
     }
     else
@@ -1829,8 +1833,12 @@ void upload_complete_handle_allSuccess(const obs_options *options, char *key, ob
         }
         if (handler->upload_file_callback)
         {
-            handler->upload_file_callback(OBS_STATUS_InternalError,
-                "some part success , some parts failed!\n", partCount, resultInfo, callback_data);
+            if (*upload_file_config->pause_upload_flag == 1)
+                handler->upload_file_callback(OBS_STATUS_OperationAborted,
+                    "abort!\n", 0, NULL, callback_data);
+            else
+                handler->upload_file_callback(OBS_STATUS_InternalError,
+                    "some part success , some parts failed!\n", partCount, resultInfo, callback_data);
         }
         free(resultInfo);
         resultInfo = NULL;
@@ -1894,8 +1902,14 @@ void upload_complete_handle(const obs_options *options, char *key, obs_upload_fi
 
     if (handler->upload_file_callback)
     {
-        handler->upload_file_callback(OBS_STATUS_InternalError,
-            "some part success, some parts failed!\n", partCount, resultInfo, callback_data);
+        if (upload_file_config->pause_upload_flag) {
+            handler->upload_file_callback(OBS_STATUS_OperationAborted,
+                "abort!\n", partCount, resultInfo, callback_data);
+        }
+        else {
+            handler->upload_file_callback(OBS_STATUS_InternalError,
+                "some part success, some parts failed!\n", partCount, resultInfo, callback_data);
+        }
     }
     free(resultInfo);
     resultInfo = NULL;
